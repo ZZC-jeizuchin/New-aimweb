@@ -1097,6 +1097,48 @@
             box-shadow: var(--crosshair-outline-style);
         }
 
+        /* === 開鏡瞄準鏡 (ADS Scope) === */
+        #ads-scope {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 6; /* 高於原準星 */
+        }
+
+        #ads-scope.hidden {
+            display: none;
+        }
+
+        .scope-frame {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 40vmin;
+            height: 40vmin;
+            border: 3px solid rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.15);
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1), inset 0 0 20px rgba(0, 0, 0, 0.4);
+            border-radius: 8px;
+        }
+
+        .scope-dot {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 8px;
+            height: 8px;
+            background: #ff0000;
+            border-radius: 50%;
+            box-shadow: 0 0 6px #ff0000, 0 0 10px #ff0000;
+            outline: 1px solid rgba(0, 0, 0, 0.6);
+            outline-offset: 1px;
+        }
+
         #settings-btn {
             position: fixed; 
             top: 30px;
@@ -1368,6 +1410,11 @@
             <div class="crosshair-line left"></div>
             <div class="crosshair-line right"></div>
             <div class="crosshair-dot"></div>
+        </div>
+        <!-- 新增開鏡瞄準鏡元素 -->
+        <div id="ads-scope" class="hidden">
+            <div class="scope-frame"></div>
+            <div class="scope-dot"></div>
         </div>
         <div id="hud-top-bar">
             <div id="score">分數: 0</div>
