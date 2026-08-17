@@ -1,0 +1,1627 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="icon.png">
+    <title>AimWeb - 基於瀏覽器的第一人稱射擊訓練</title>
+    <style>
+        /* === CSS 變數 === */
+        :root {
+            --crosshair-color: rgba(255, 255, 255, 1);
+            --crosshair-length: 7px;
+            --crosshair-thickness: 2px;
+            --crosshair-gap: 0px;
+            --crosshair-dot-display: none;
+            --crosshair-dot-size: 2px;
+            --crosshair-outline-thickness: 1px;
+            --crosshair-outline-color: #000000;
+            --crosshair-outline-style: none;
+
+            /* UI 主題變數 */
+            --bg-dark: #050505;
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text-main: #f0f0f0;
+            --radius-md: 12px;
+            --radius-sm: 6px;
+            
+            /* 新增金色主題變數 */
+            --gold-primary: #ffd700;
+        }
+
+        /* === 基礎重置 === */
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+        }
+
+        #game-canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            cursor: none;
+        }
+
+        /* === UI 疊層 (Glass Effect) === */
+        .ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.75);
+            z-index: 10;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            text-align: center;
+            transition: opacity 0.3s ease, visibility 0.3s;
+            overflow-y: auto;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+        
+        #start-screen {
+            justify-content: center;
+            padding-top: 0; 
+        }
+
+        #audio-settings-modal {
+            z-index: 50; 
+        }
+        
+        .ui-overlay::-webkit-scrollbar { display: none; }
+        
+        .hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            display: none !important; 
+        }
+
+        /* === 標題與文字 === */
+        .ui-overlay h1 {
+            font-size: 3.5rem;
+            font-weight: 300;
+            letter-spacing: 2px;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            white-space: nowrap;
+        }
+        
+        #pause-screen h1 {
+            margin-bottom: 3rem; 
+        }
+        
+        #logo-icon {
+            width: 5rem;
+            height: 5rem;
+            margin-right: 20px;
+            filter: drop-shadow(0 0 10px rgba(255,255,255,0.3));
+        }
+
+        .ui-overlay p {
+            font-size: 1.1rem;
+            color: #ccc;
+            max-width: 500px;
+            line-height: 1.6;
+            margin-bottom: 2rem;
+            font-weight: 300;
+        }
+        
+        /* === 現代化容器風格 (Cards) === */
+        .settings-container, #crosshair-customizer, #audio-settings-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            padding: 2rem;
+            border-radius: var(--radius-md);
+            margin-top: 0;
+            width: 100%;
+            max-width: 500px;
+            box-sizing: border-box;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        #profile-settings-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+
+        .setting-group {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            width: 100%;
+        }
+
+        .settings-container label, #audio-settings-card label {
+            font-size: 1rem;
+            color: var(--text-main);
+            white-space: nowrap;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+        
+        /* === 現代化滑桿 (Range Slider) === */
+        .slider-wrapper {
+            position: relative;
+            width: 60%; 
+            display: flex;
+            align-items: center;
+        }
+
+        .slider-wrapper.disabled {
+            opacity: 0.5;
+            pointer-events: none;
+            filter: grayscale(100%);
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            outline: none;
+            transition: background 0.2s;
+            flex-grow: 1; 
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #fff;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: none;
+            margin-top: -7px;
+        }
+        
+        input[type="range"]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+        }
+
+        input[type="range"]:hover::-webkit-slider-thumb {
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+        }
+
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none !important;
+            margin: 0 !important;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield !important;
+        }
+
+        /* === 新增: Toggle Switch === */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 22px;
+            margin-left: 10px;
+        }
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .switch-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(255,255,255,0.1);
+            transition: .3s;
+            border-radius: 22px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .switch-slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s cubic-bezier(0.4, 0.0, 0.2, 1);
+            border-radius: 50%;
+        }
+        .switch input:checked + .switch-slider {
+            background-color: #ffffff;
+            border-color: #ffffff;
+        }
+        .switch input:checked + .switch-slider:before {
+            transform: translateX(18px);
+            background-color: #000000;
+        }
+
+        /* === 下拉選單 (Select) === */
+        .select-wrapper {
+            position: relative;
+            display: inline-block;
+            width: 60%;
+            border-radius: var(--radius-sm);
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--glass-border);
+            transition: all 0.3s ease;
+        }
+
+        .select-wrapper:hover {
+            border-color: rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .select-wrapper::after {
+            content: '▼';
+            font-size: 0.7rem;
+            color: #888;
+            position: absolute;
+            top: 50%;
+            right: 1rem;
+            transform: translateY(-50%);
+            pointer-events: none;
+        }
+
+        .select-wrapper select {
+            width: 100%;
+            padding: 0.6rem 1rem;
+            border: none;
+            background: transparent;
+            color: white;
+            -webkit-appearance: none;
+            appearance: none;
+            cursor: pointer;
+            font-size: 0.95rem;
+            outline: none;
+            font-family: inherit;
+        }
+        
+        .select-wrapper select:disabled {
+            cursor: not-allowed;
+            color: #888;
+        }
+        
+        .select-wrapper select option {
+            background: #111;
+            color: white;
+            padding: 10px;
+        }
+        
+        /* === 靈敏度表格 === */
+        #sensitivity-conversions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.8rem;
+            font-size: 0.85rem;
+            margin-top: 0.5rem; 
+            width: 100%;
+            align-content: start;
+            flex-grow: 1; 
+        }
+        
+        #sensitivity-conversions p { 
+            margin: 0; 
+            padding: 0.4rem 0.6rem; 
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 4px;
+            color: #aaa; 
+            display: flex; 
+            align-items: center; 
+            min-height: 28px; 
+        }
+        
+        #sensitivity-conversions label {
+            margin-right: auto; 
+            cursor: default;
+        }
+
+        [contenteditable="true"] {
+            max-width: 65px;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+
+        #sensitivity-conversions span { 
+            font-weight: 600; 
+            color: #fff; 
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        #sensitivity-conversions span:focus { 
+            background: rgba(255, 255, 255, 0.2); 
+            outline: none;
+        }
+
+        .sync-btn {
+            width: auto;
+            margin: 0.8rem auto; 
+            padding: 0.4rem 1.2rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.05); 
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #ccc;
+            border-radius: var(--radius-sm); 
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: block; 
+        }
+        .sync-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.4);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.05);
+        }
+        .sync-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* === 現代化按鈕 === */
+        .btn {
+            cursor: pointer;
+            padding: 0.9rem 2rem;
+            font-size: 1rem;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            color: #eee;
+            border-radius: var(--radius-sm);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(4px);
+            width: 100%;
+            max-width: 300px;
+            box-sizing: border-box;
+            transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #start-button {
+            margin-top: 1.5rem; 
+            border-radius: 50px; 
+            padding: 1rem 4rem; 
+        }
+
+        .btn:hover {
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.5);
+            background: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+            box-shadow: none;
+        }
+
+        .btn.disabled, .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+            border-color: transparent;
+        }
+        
+        .btn-primary {
+            font-size: 1.1rem;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            margin-top: 1rem; 
+        }
+
+        .btn-primary:hover {
+            background: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 0 25px rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-highlight {
+            background: #fff;
+            color: #000;
+            border: none;
+            font-weight: 800;
+            font-size: 1.25rem;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+            transform: scale(1.02);
+            animation: pulse-white 2s infinite;
+        }
+
+        .btn-highlight:hover {
+            background: #fff;
+            color: #000;
+            transform: scale(1.05) translateY(-2px);
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.6);
+        }
+        
+        @keyframes pulse-white {
+            0% { box-shadow: 0 0 15px rgba(255, 255, 255, 0.2); }
+            50% { box-shadow: 0 0 25px rgba(255, 255, 255, 0.5); }
+            100% { box-shadow: 0 0 15px rgba(255, 255, 255, 0.2); }
+        }
+
+        .clear-scores-btn {
+            background: transparent; 
+            color: #888; 
+            border: 1px solid rgba(255,255,255,0.1); 
+            border-radius: 20px;
+            padding: 0.3rem 0.9rem; 
+            font-size: 0.75rem; 
+            margin-left: 1rem; 
+            width: auto; 
+            margin-top: 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .clear-scores-btn:hover { 
+            background: rgba(255, 255, 255, 0.1); 
+            color: #fff; 
+            border-color: #aaa; 
+            box-shadow: none;
+            transform: none;
+        }
+
+        /* === 獨立的翻轉切換按鈕 === */
+        .panel-flip-btn {
+            display: flex; 
+            align-items: center; 
+            gap: 6px; 
+            margin: 0; 
+            padding: 0.4rem 1rem; 
+            border-radius: 20px; 
+            font-size: 0.85rem; 
+            font-weight: 600; 
+            background: rgba(255,255,255,0.05); 
+            border: 1px solid rgba(255,255,255,0.1); 
+            color: #ccc; 
+            cursor: pointer; 
+            transition: all 0.2s;
+        }
+        
+        .panel-flip-btn:hover {
+            background: rgba(255, 255, 255, 0.1); 
+            color: #fff; 
+            border-color: #aaa; 
+            box-shadow: none;
+            transform: none;
+        }
+
+        #start-right-column {
+            position: relative;
+            margin-top: -10px; /* 與排行榜高度平齊 */
+        }
+        
+        #start-right-column .side-panel {
+            margin-top: 0 !important; /* 確保內部容器不再偏移 */
+        }
+
+        /* === 分段控制器 (翹翹板開關) === */
+        .segmented-control {
+            display: flex;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 6px;
+            padding: 2px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .segmented-control button {
+            background: transparent;
+            border: none;
+            color: #888;
+            padding: 2px 8px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s;
+            font-family: inherit;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+        .segmented-control button.active {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+
+        /* === 獨立彈窗 === */
+        .modal-card {
+            background: linear-gradient(145deg, rgba(25, 25, 25, 0.4), rgba(10, 10, 10, 0.5));
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 2.5rem;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 420px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        .modal-title {
+            margin-top: 0;
+            margin-bottom: 2rem;
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: #fff;
+            text-align: center;
+            letter-spacing: 1px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 1rem;
+        }
+
+        .modal-btn-group {
+            margin-top: 2rem;
+            display: flex;
+            gap: 1rem;
+            justify-content: space-between;
+        }
+
+        .btn-modal {
+            flex: 1;
+            padding: 0.8rem 1.2rem;
+            font-size: 0.95rem;
+            font-weight: 500;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            box-sizing: border-box;
+            white-space: nowrap;
+        }
+
+        .btn-modal-secondary {
+            background: transparent;
+            color: #999;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-modal-secondary:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .text-link-btn {
+            background: transparent;
+            color: #888;
+            text-decoration: none;
+            transition: color 0.2s ease;
+            display: inline-block;
+        }
+
+        .text-link-btn:hover {
+            color: #fff;
+        }
+
+        .version-text {
+            text-align: left;
+            white-space: pre-wrap;
+            font-family: 'Inter', monospace;
+            color: #d1d1d1;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 1.2rem;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            margin: 0;
+            max-height: 527px; 
+            overflow-y: auto;
+        }
+        
+        .version-text::-webkit-scrollbar { width: 6px; }
+        .version-text::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 3px; }
+
+        /* === 佈局系統 (Grid) === */
+        .content-wrapper {
+            display: grid;
+            grid-template-columns: minmax(200px, 1fr) minmax(320px, 500px) minmax(200px, 1fr);
+            align-items: center; 
+            width: 95vw; 
+            max-width: 1400px;
+            gap: 3vw; 
+            margin: 0 auto;
+        }
+
+        #start-screen .content-wrapper {
+            align-items: flex-start;
+        }
+
+        #start-screen .main-panel {
+            margin-top: 80px; 
+        }
+
+        #game-over-screen .content-wrapper {
+            grid-template-columns: minmax(200px, 1fr) minmax(320px, 450px) minmax(320px, 1.2fr);
+        }
+
+        .main-panel {
+            width: 100%;
+            min-height: 620px; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start; 
+            gap: 1rem;
+        }
+        
+        .side-panel { width: 100%; }
+        
+        .side-panel.leaderboard {
+            justify-self: end;
+            margin-top: -10px; 
+            height: 620px; 
+            display: flex;
+            flex-direction: column;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            box-sizing: border-box;
+        }
+        
+        .analysis-panel {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            padding: 1.2rem 1.5rem;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            height: 620px;
+            overflow-y: auto;
+            margin-top: -10px; /* 使結算畫面與排行榜高度平齊 */
+        }
+        
+        /* 替數據分析面板增加自訂捲軸 */
+        .analysis-panel::-webkit-scrollbar { 
+            display: block; 
+            width: 6px; 
+        }
+        .analysis-panel::-webkit-scrollbar-track { 
+            background: transparent; 
+        }
+        .analysis-panel::-webkit-scrollbar-thumb { 
+            background: rgba(255, 255, 255, 0.15); 
+            border-radius: 3px; 
+        }
+        .analysis-panel::-webkit-scrollbar-thumb:hover { 
+            background: rgba(255, 255, 255, 0.3); 
+        }
+
+        .analysis-panel h2 { 
+            color: #fff; 
+            text-align: left; 
+            margin: 0 0 0.8rem 0; 
+            font-size: 1.2rem;
+            font-weight: 600;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 0.5rem;
+        }
+        .analysis-section {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 0.8rem;
+        }
+        .analysis-section h3 {
+            font-size: 0.85rem;
+            color: #ccc;
+            margin: 0 0 0.4rem 0;
+            text-align: left;
+            width: 100%;
+        }
+        .analysis-section canvas {
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-sm);
+            width: 100%;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        #radar-chart, #radar-chart-acc {
+            border-radius: 50%;
+            width: 150px;
+            height: 150px;
+            margin: 0 auto;
+        }
+        #blind-spot-text, #blind-spot-text-acc {
+            font-size: 0.8rem; 
+            margin-top: 0.3rem; 
+            text-align: center; 
+            min-height: 1.2rem;
+        }
+
+        .chart-tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s ease-out;
+            z-index: 100;
+            white-space: nowrap;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            line-height: 1.4;
+        }
+
+        .leaderboard h2 { 
+            color: #fff; 
+            text-align: left; 
+            margin: 0; 
+            font-size: 1.2rem;
+            font-weight: 600;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 0.5rem;
+        }
+        .leaderboard-header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 1rem;
+            flex-shrink: 0; 
+        }
+        
+        .leaderboard ol { 
+            list-style: none; 
+            padding: 0; 
+            margin: 0; 
+            padding-top: 0.2rem;
+            color: #ddd; 
+            width: 100%; 
+            overflow-y: auto; 
+            flex-grow: 1; 
+        }
+        
+        .leaderboard ol::-webkit-scrollbar { display: none; }
+        
+        .leaderboard li { 
+            background: rgba(255,255,255,0.03); 
+            padding: 0.85rem 1rem; /* 高度加寬 */
+            margin-bottom: 0.6rem; /* 間距加寬 */
+            border-radius: 6px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            transition: all 0.2s ease; 
+            width: 100%; 
+            box-sizing: border-box;
+            border-left: 3px solid transparent; 
+        }
+        
+        .leaderboard li:hover {
+            background: rgba(255,255,255,0.08);
+            transform: translateX(3px);
+        }
+
+        .leaderboard li.new-highscore { 
+            background: rgba(255, 255, 255, 0.12); 
+            border-left: 3px solid transparent; 
+            box-shadow: none; 
+        }
+        
+        .leaderboard li.new-highscore .score {
+            color: #fff;
+            text-shadow: none; 
+        }
+        
+        .leaderboard .score { 
+            font-weight: 700; 
+            color: white; 
+            font-size: 1.5rem; 
+            white-space: nowrap; 
+            letter-spacing: -0.5px;
+        }
+        .leaderboard .details { display: flex; flex-direction: column; align-items: flex-end; }
+        .leaderboard .date { color: #666; font-size: 0.7rem; margin-bottom: 0.3rem; }
+        .leaderboard .stats { 
+            font-size: 0.7rem; 
+            color: #aaa; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: flex-end; 
+        }
+
+        .leaderboard-title-container { position: relative; cursor: help; }
+        .tooltip-container { position: relative; cursor: help; display: flex; align-items: center; }
+        .tier-tooltip {
+            position: absolute;
+            bottom: 120%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 6px 12px;
+            background-color: rgba(0,0,0,0.9);
+            border: 1px solid #333;
+            color: white;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            white-space: nowrap;
+            z-index: 100;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .leaderboard-title-container .tier-tooltip { display: none !important; /* 暫不顯示牌位 */ }
+        .tooltip-container:hover .tier-tooltip { opacity: 1; visibility: visible; }
+
+        #crosshair-customizer {
+            justify-self: start;
+            margin-top: -10px; 
+            padding: 1.5rem;
+            height: 620px; 
+            box-sizing: border-box;
+        }
+        #crosshair-customizer h2 { 
+            margin-top: 0; 
+            text-align: left; 
+            font-size: 1.2rem; 
+            font-weight: 600;
+            margin-bottom: 1.2rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 0.5rem;
+        }
+        #crosshair-preview-box {
+            width: 100%;
+            height: 120px;
+            background-color: rgba(255, 255, 255, 0.12); 
+            border: 1px solid #333;
+            border-radius: var(--radius-sm);
+            margin-bottom: 1.5rem;
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5); 
+        }
+        .crosshair-controls { display: flex; flex-direction: column; gap: 0.8rem; }
+        .control-row { display: flex; justify-content: space-between; align-items: center; }
+        .control-row label { font-size: 0.85rem; color: #ccc; }
+        
+        .control-row input[type="color"] { 
+            -webkit-appearance: none;
+            padding: 0; 
+            border: 1px solid #444; 
+            border-radius: 4px;
+            background: none; 
+            width: 24px; 
+            height: 24px; 
+            cursor: pointer;
+            overflow: hidden;
+        }
+        .control-row input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        .control-row input[type="color"]::-webkit-color-swatch { border: none; }
+        
+        .control-row input[type="checkbox"] { 
+            width: 18px; 
+            height: 18px; 
+            cursor: pointer;
+            accent-color: #888;
+        }
+        .control-row span { font-size: 0.85rem; color: #fff; min-width: 30px; text-align: right; font-variant-numeric: tabular-nums; }
+
+        #hud {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+        
+        #hud-top-bar {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            justify-content: center; /* 改為置中，依靠 gap 撐開 */
+            gap: 3rem; /* 設置文字間的固定間隔 */
+            width: auto; /* 移除寬度硬性限制，讓背景完美包覆文字 */
+            padding: 10px 55px 14px 55px; /* 保持原本面積加大的留白 */
+            z-index: 10;
+            pointer-events: none;
+            border: none;
+            box-shadow: none;
+        }
+
+        #fps-display {
+            position: absolute;
+            top: 15px;
+            left: 20px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9rem;
+            font-family: 'Inter', monospace;
+            font-weight: 600;
+            pointer-events: none;
+            z-index: 10;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #hud-top-bar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -15px; 
+            right: -15px;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.15); 
+            backdrop-filter: blur(4px); 
+            -webkit-backdrop-filter: blur(4px);
+            transform: perspective(100px) rotateX(-5deg); 
+            transform-origin: top; 
+            border-radius: 0 0 16px 16px; 
+            z-index: -1; 
+        }
+
+        #score, #timer, #accuracy { 
+            font-family: sans-serif;
+            font-size: 1.54rem; /* 字體微調放大 10% (1.4 -> 1.54) */
+            font-weight: 300;
+            color: rgba(255, 255, 255, 0.85); 
+            text-shadow: 0 1px 4px rgba(0,0,0,0.3); 
+            margin: 0;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums; 
+        }
+        
+        /* 實作羽翼般排版與置中 */
+        #score { text-align: right; min-width: 120px; }
+        #timer { text-align: center; font-weight: 500; color: #fff; text-shadow: 0 2px 5px rgba(0,0,0,0.5); min-width: 100px; }
+        #accuracy { text-align: left; min-width: 120px; }
+
+        .crosshair-container {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        .crosshair-line {
+            background-color: var(--crosshair-color);
+            position: absolute;
+            box-shadow: var(--crosshair-outline-style);
+        }
+        
+        .crosshair-line.top {
+            width: var(--crosshair-thickness);
+            height: var(--crosshair-length);
+            bottom: calc(50% + var(--crosshair-gap));
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .crosshair-line.bottom {
+            width: var(--crosshair-thickness);
+            height: var(--crosshair-length);
+            top: calc(50% + var(--crosshair-gap));
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .crosshair-line.left {
+            width: var(--crosshair-length);
+            height: var(--crosshair-thickness);
+            right: calc(50% + var(--crosshair-gap));
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .crosshair-line.right {
+            width: var(--crosshair-length);
+            height: var(--crosshair-thickness);
+            left: calc(50% + var(--crosshair-gap));
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        
+        /* === 平移跟槍專用血條UI === */
+        #hp-bar-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 60px;
+            height: 6px;
+            background: transparent;
+            border: none;
+            pointer-events: none;
+            z-index: 6;
+        }
+        #hp-bar-fill {
+            width: 100%;
+            height: 100%;
+            background: #ffffff;
+            box-shadow: 0 0 5px #ffffff;
+            transition: none;
+        }
+
+        /* === 邊緣受傷視網膜紅光效果 === */
+        #damage-overlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            box-shadow: inset 0 0 0 rgba(255, 0, 0, 0);
+            transition: box-shadow 0.5s ease-out;
+            z-index: 4;
+        }
+        #damage-overlay.active {
+            box-shadow: inset 0 0 150px rgba(255, 0, 0, 0.6);
+            transition: none;
+        }
+
+        #feedback-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 4; 
+            opacity: 0;
+        }
+
+        .crosshair-dot {
+            display: var(--crosshair-dot-display);
+            width: var(--crosshair-dot-size);
+            height: var(--crosshair-dot-size);
+            background-color: var(--crosshair-color);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: var(--crosshair-outline-style);
+        }
+
+        #settings-btn {
+            position: fixed; 
+            top: 30px;
+            right: 30px;
+            z-index: 20; 
+            cursor: pointer;
+            width: 32px;
+            height: 32px;
+            color: rgba(255,255,255,0.6);
+            transition: all 0.2s;
+        }
+        #settings-btn:hover { color: #fff; transform: scale(1.1) rotate(45deg); }
+        #settings-btn svg { width: 100%; height: 100%; }
+
+        #back-home-btn {
+            position: fixed; 
+            top: 30px;
+            left: 30px;
+            z-index: 20; 
+            cursor: pointer;
+            width: 25px;
+            height: 25px;
+            color: rgba(255,255,255,0.6);
+            transition: all 0.2s;
+        }
+        /* 更新為符合房屋圖示的懸浮效果 */
+        #back-home-btn:hover { color: #fff; transform: scale(1.1) translateY(-2px); }
+        #back-home-btn svg { width: 100%; height: 100%; }
+
+        .final-score-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 0.5rem 0 1.5rem 0;
+        }
+        
+        .score-label-small {
+            font-size: 1rem;
+            color: #888;
+            font-weight: 500;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: -5px; 
+        }
+
+        #final-score {
+            font-size: 4rem; 
+            font-weight: 800;
+            color: #fff;
+            text-shadow: 0 0 30px rgba(255,255,255,0.4);
+            margin: 0 !important; 
+            letter-spacing: -2px;
+            line-height: 1.1;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 0.8rem 0;
+            width: 100%;
+        }
+        .stat-row:last-child {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            color: #aaa;
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+
+        .stat-value {
+            color: #fff;
+            font-weight: 700;
+            font-size: 1.2rem;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .new-record-alert {
+            color: var(--gold-primary);
+            font-size: 1.5rem;
+            font-weight: 800;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
+            margin-bottom: 0.5rem;
+            animation: pulse-gold 1.5s infinite;
+        }
+
+        @keyframes pulse-gold {
+            0% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.05); opacity: 1; text-shadow: 0 0 30px rgba(255, 215, 0, 0.8); }
+            100% { transform: scale(1); opacity: 0.8; }
+        }
+        
+        @keyframes popIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        #version-display {
+            position: fixed;
+            bottom: 15px;
+            right: 20px;
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 1.3rem;
+            cursor: pointer;
+            z-index: 20;
+            transition: color 0.2s, transform 0.2s;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+
+        #version-display:hover {
+            color: #fff;
+            transform: translateY(-2px);
+        }
+
+        #version-modal {
+            z-index: 60;
+        }
+
+        @media (max-width: 1024px) {
+            .content-wrapper, #game-over-screen .content-wrapper {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+                padding: 2rem 0;
+                overflow-y: auto;
+            }
+
+            .main-panel { order: 1; min-height: 620px; }
+            .side-panel.leaderboard { order: 2; width: 100%; max-width: 500px; justify-self: center; }
+            .side-panel.analysis-panel { order: 3; width: 100%; max-width: 600px; justify-self: center; height: auto; min-height: auto; }
+            #start-right-column { order: 4; width: 100%; max-width: 500px; justify-self: center; }
+            #crosshair-customizer { height: auto; margin-top: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div id="chart-tooltip" class="chart-tooltip"></div>
+    <canvas id="game-canvas"></canvas>
+
+    <audio id="hit-sound" src="hit.mp3" preload="auto"></audio>
+    <audio id="shoot-sound" src="shoot.mp3" preload="auto"></audio>
+
+    <div id="feedback-overlay"></div>
+
+    <div id="settings-btn" title="設定">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+    </div>
+
+    <a id="back-home-btn" href="https://nonescapes.com" title="回到官網">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+        </svg>
+    </a>
+
+    <!-- 新增等待開始的 Overlay -->
+    <div id="game-start-overlay" class="hidden" style="position: absolute; top:0; left:0; width:100%; height:100%; display:flex; justify-content:center; align-items:center; z-index: 7; pointer-events: none; background: rgba(0,0,0,0.3); backdrop-filter: blur(4px);">
+        <h1 id="game-start-text" style="font-size: 6rem; color: #fff; text-shadow: 0 0 20px rgba(255,255,255,0.8); margin: 0; animation: popIn 0.3s ease-out;"></h1>
+    </div>
+
+    <div id="audio-settings-modal" class="ui-overlay hidden">
+        <div id="audio-settings-card" class="modal-card">
+            <h2 class="modal-title">設定</h2>
+            
+            <div class="setting-group">
+                <label for="hit-volume-slider">擊中音效</label>
+                <div class="slider-wrapper">
+                    <input type="range" id="hit-volume-slider" min="0" max="100" value="50">
+                </div>
+                <span id="hit-volume-val" style="min-width:30px; text-align:right; font-size:0.9rem;">50%</span>
+            </div>
+
+            <!-- 調整槍聲音效不可調 -->
+            <div class="setting-group" style="opacity: 0.5;">
+                <label for="shoot-volume-slider">槍聲音效</label>
+                <div class="slider-wrapper disabled">
+                    <input type="range" id="shoot-volume-slider" min="0" max="100" value="0" disabled>
+                </div>
+                <span id="shoot-volume-val" style="min-width:30px; text-align:right; font-size:0.9rem;">0%</span>
+            </div>
+
+            <div style="width: 100%; height: 1px; background: rgba(255,255,255,0.1); margin: 1.5rem 0;"></div>
+            
+            <div class="setting-group">
+                <label>FPS 顯示</label>
+                <div class="select-wrapper" style="width: 60%;">
+                    <select id="fps-display-select">
+                        <option value="off">關閉</option>
+                        <option value="on" selected>開啟</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="setting-group">
+                <div class="tooltip-container">
+                    <label style="cursor: help;">偵錯模式</label>
+                    <div class="tier-tooltip" style="white-space: normal; width: 220px; text-align: left; line-height: 1.4; bottom: 140%; left: 0; transform: translateX(0);">開啟後，未命中目標時畫面會閃爍紅光(過度甩槍)或綠光(甩不到)提供即時反饋</div>
+                </div>
+                <div class="select-wrapper" style="width: 60%;">
+                    <select id="debug-mode-select">
+                        <option value="off" selected>關閉</option>
+                        <option value="on">開啟</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 增加 Tooltip 並修改倒數秒數最小值為 0 -->
+            <div class="setting-group">
+                <div class="tooltip-container">
+                    <label style="cursor: help;">開始選項</label>
+                    <div class="tier-tooltip" style="white-space: normal; width: 220px; text-align: left; line-height: 1.4; bottom: 140%; left: 0; transform: translateX(0);">設定開始前的等待方式。若設定為 0 秒，進入後需點擊畫面才會正式開始。</div>
+                </div>
+                <div style="display: flex; width: 60%; gap: 10px; align-items: center;">
+                    <div class="select-wrapper" style="flex: 1;">
+                        <select id="start-option-select" onchange="document.getElementById('countdown-container').style.display = this.value === 'countdown' ? 'flex' : 'none';">
+                            <option value="direct" selected>直接開始</option>
+                            <option value="countdown">倒數計時</option>
+                        </select>
+                    </div>
+                    <div id="countdown-container" style="display: none; align-items: center; gap: 5px; flex: 0 0 70px;">
+                        <input type="number" id="countdown-seconds" min="0" max="10" value="3" style="width: 100%; padding: 0.5rem 0.2rem; border-radius: var(--radius-sm); border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: white; outline: none; text-align: center; font-family: inherit;">
+                        <span style="font-size: 0.85rem; color: #aaa;">秒</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="setting-group" style="flex-direction: column; align-items: flex-start; gap: 1rem;">
+                <div style="display: flex; justify-content: space-between; width: 100%; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem;">
+                    <label style="font-size: 1.1rem; color: #fff; font-weight: 600;">外觀設定</label>
+                    <button id="reset-colors-btn" class="clear-scores-btn" style="margin: 0; padding: 0.3rem 0.8rem;">預設</button>
+                </div>
+                <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+                    <label>場地風格</label>
+                    <div class="select-wrapper" style="width: 120px;">
+                        <select id="scene-theme-select">
+                            <option value="dark" selected>試煉之間</option>
+                            <option value="space">無垠星空</option>
+                            <option value="grid">灰色網格</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+                    <label>目標顏色</label>
+                    <input type="color" id="target-color-picker" value="#ffffff" style="-webkit-appearance: none; padding: 0; border: 1px solid #444; border-radius: 4px; background: none; width: 24px; height: 24px; cursor: pointer; overflow: hidden;">
+                </div>
+                <div id="target-preview-box" style="width: 100%; height: 120px; background-color: #000; border: 1px solid #333; border-radius: var(--radius-sm); position: relative; overflow: hidden; box-shadow: inset 0 0 20px rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center;">
+                    <canvas id="preview-canvas" style="width: 100%; height: 100%; display: block"></canvas>
+                </div>
+            </div>
+
+            <div style="margin-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.5rem; display: flex; justify-content: center; align-items: center; position: relative;">
+                <button id="close-settings-btn" class="btn-modal btn-modal-secondary" style="flex: none; padding: 0.75rem 3.5rem; min-width: 160px; font-size: 1.05rem; color: #fff;">確定</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="hud" class="hidden">
+        <div id="fps-display">0 FPS</div>
+        <div id="crosshair-in-game" class="crosshair-container">
+            <div class="crosshair-line top"></div>
+            <div class="crosshair-line bottom"></div>
+            <div class="crosshair-line left"></div>
+            <div class="crosshair-line right"></div>
+            <div class="crosshair-dot"></div>
+        </div>
+        <div id="hud-top-bar">
+            <div id="score">分數: 0</div>
+            <div id="timer">時間: 60</div>
+            <div id="accuracy">命中率: 0%</div>
+        </div>
+        <div id="hp-bar-container" class="hidden">
+            <div id="hp-bar-fill"></div>
+        </div>
+    </div>
+
+    <div id="damage-overlay"></div>
+
+    <div id="start-screen" class="ui-overlay">
+        <div class="title-section" style="display: flex; flex-direction: column; align-items: center; margin-bottom: 2rem;; position: relative; top: 40px;">
+            <h1><a href="https://nonescapes.com" title="回到官網" style="display: flex; align-items: center; text-decoration: none; color: inherit;"><img id="logo-icon" src="icon.png" alt="AimWeb Icon" onerror="this.style.display='none'"></a>AimWeb</h1>
+            <p style="margin-bottom: 0;">基於瀏覽器的免費 3D 射擊訓練工具，<br>幫助你提升 FPS 遊戲中的準度與反應速度。</p>
+        </div>
+
+        <div class="content-wrapper">
+            <div class="side-panel leaderboard">
+                <div class="leaderboard-header">
+                    <div class="leaderboard-title-container">
+                        <h2 id="leaderboard-title">最高分數</h2>
+                        <div class="tier-tooltip"></div>
+                    </div>
+                    <button class="clear-scores-btn">清除</button>
+                </div>
+                <ol id="highscore-list-main"></ol>
+            </div>
+            <div class="main-panel">
+                <div class="settings-container" style="padding: 1.5rem 2rem; margin-bottom: 0;">
+                    <div class="setting-group" style="margin-bottom: 0.5rem;">
+                        <label for="game-mode-select">訓練模式</label>
+                        <div class="select-wrapper">
+                            <select id="game-mode-select"></select>
+                        </div>
+                    </div>
+                    <!-- 新增短時模式 Toggle -->
+                    <div class="setting-group" style="margin-top: 0; margin-bottom: 0; padding-top: 0.8rem; border-top: 1px solid rgba(255,255,255,0.05); justify-content: space-between;">
+                        <div class="tooltip-container">
+                            <label for="short-mode-toggle" style="color: #aaa; font-size: 0.9rem; cursor: help; margin: 0;">短時模式</label>
+                            <div class="tier-tooltip" style="white-space: normal; width: 220px; text-align: left; line-height: 1.4; bottom: 140%; left: 0; transform: translateX(0);">時間變為15秒，專為利用遊戲佇列或死亡時的零碎時間設計。</div>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="short-mode-toggle">
+                            <span class="switch-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div id="profile-settings-container" class="settings-container">
+                    <div class="setting-group">
+                        <label for="fov-preset-select">遊戲設定檔</label>
+                        <div class="select-wrapper">
+                            <select id="fov-preset-select">
+                                <option value="custom" selected>自訂 (Custom)</option>
+                                <option value="val">Valorant</option>
+                                <option value="cs2">Counter-Strike 2</option>
+                                <option value="apex">Apex Legends</option>
+                                <option value="ow">Overwatch</option>
+                                <option value="r6">Rainbow Six Siege</option>
+                                <option value="pubg">PUBG</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="aspect-ratio-group" class="setting-group">
+                        <div class="tooltip-container">
+                            <label for="aspect-ratio-select" style="cursor: help;">長寬比</label>
+                            <div class="tier-tooltip" style="white-space: normal; width: 220px; text-align: left; line-height: 1.4; bottom: 140%; left: 0; transform: translateX(0);">一般來說保持 16:9 即可，除非你在遊戲中有特別調整過解析度比例。</div>
+                        </div>
+                        <div class="select-wrapper">
+                            <select id="aspect-ratio-select">
+                                <option value="16:9" selected>16:9 (Native)</option>
+                                <option value="4:3">4:3 (Stretched)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="setting-group">
+                        <div class="tooltip-container">
+                            <label for="fov-slider" style="cursor: help;">視野 (FOV)</label>
+                            <div class="tier-tooltip" style="white-space: normal; width: 220px; text-align: left; line-height: 1.4; bottom: 140%; left: 0; transform: translateX(0);">調整遊戲內的視野大小。數值會根據所選的遊戲設定檔自動轉換對應。</div>
+                        </div>
+                        <div id="fov-slider-container" class="slider-wrapper">
+                             <input type="range" id="fov-slider" min="70" max="130" value="103">
+                             <span id="fov-value" contenteditable="true" style="margin-left: 15px; font-weight: bold; cursor: text; min-width: 30px; text-align:right;">103</span>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-group" style="margin-bottom: 0.5rem;">
+                        <div class="tooltip-container">
+                            <label for="sensitivity-slider" style="cursor: help;">滑鼠靈敏度</label>
+                            <div class="tier-tooltip" style="white-space: normal; width: 200px; text-align: left; line-height: 1.4; bottom: 140%; left: 0; transform: translateX(0);">使用你在該遊戲設定使用的數值</div>
+                        </div>
+                        <div class="slider-wrapper">
+                            <input type="range" id="sensitivity-slider" min="0" max="10" step="any" value="1.000">
+                            <span id="sens-value-display" contenteditable="true" title="使用你在該遊戲設定使用的數值" style="margin-left: 15px; font-weight: bold; min-width: 40px; text-align: right; display: none; cursor: text; white-space: nowrap; overflow: hidden;"></span>
+                        </div>
+                    </div>
+
+                    <div id="sensitivity-conversions">
+                        <p id="row-val"><label>Valorant:</label> <span id="val-sens" contenteditable="true" data-game="val">1.000</span></p>
+                        <p id="row-cs2"><label>CS2:</label> <span id="cs2-sens" contenteditable="true" data-game="cs2">3.182</span></p>
+                        <p id="row-apex"><label>Apex Legends:</label> <span id="apex-sens" contenteditable="true" data-game="apex">3.182</span></p>
+                        <p id="row-ow"><label>Overwatch:</label> <span id="ow-sens" contenteditable="true" data-game="ow">10.606</span></p>
+                        <p id="row-r6"><label>Rainbow 6:</label> <span id="r6-sens" contenteditable="true" data-game="r6">12.216</span></p>
+                        <p id="row-pubg"><label>PUBG:</label> <span id="pubg-sens" contenteditable="true" data-game="pubg">57.308</span></p>
+                    </div>
+                </div>
+                
+                <button id="start-button" class="btn btn-highlight">開始訓練</button>
+            </div>
+            
+            <div class="side-panel-wrapper" id="start-right-column" style="justify-self: start; width: 100%; display: flex; flex-direction: column;">
+                <!-- 獨立的翻轉切換按鈕，使用絕對定位使其不佔用高度空間 -->
+                <button id="panel-flip-btn" class="panel-flip-btn" style="position: absolute; right: 0; top: -48px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
+                    <span id="panel-flip-text">數據分析</span>
+                </button>
+                
+                <div class="side-panel" id="crosshair-customizer">
+                    <h2 style="margin-top: 0; text-align: left; font-size: 1.2rem; font-weight: 600; margin-bottom: 1.2rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem;">準心設定</h2>
+                    <div id="crosshair-preview-box">
+                        <div id="crosshair-preview" class="crosshair-container">
+                            <div class="crosshair-line top"></div><div class="crosshair-line bottom"></div><div class="crosshair-line left"></div><div class="crosshair-line right"></div><div class="crosshair-dot"></div>
+                        </div>
+                    </div>
+                    <div class="crosshair-controls">
+                        <div class="control-row"><label>顏色</label><input type="color" id="crosshair-color" value="#FFFFFF"></div>
+                        <div class="control-row"><label>透明度</label><div class="slider-wrapper" style="width:50%"><input type="range" id="crosshair-opacity" min="0" max="1" step="0.01" value="0.93"></div><span id="opacity-value">0.93</span></div>
+                        <div class="control-row"><label>線條長度</label><div class="slider-wrapper" style="width:50%"><input type="range" id="crosshair-length" min="0" max="25" value="4"></div><span id="length-value">4</span></div>
+                        <div class="control-row"><label>線條寬度</label><div class="slider-wrapper" style="width:50%"><input type="range" id="crosshair-thickness" min="1" max="3" step="0.05" value="1.65"></div><span id="thickness-value">1.65</span></div>
+                        <div class="control-row"><label>中心間距</label><div class="slider-wrapper" style="width:50%"><input type="range" id="crosshair-gap" min="0" max="20" value="2"></div><span id="gap-value">2</span></div>
+                        <div class="control-row"><label>中心點</label><input type="checkbox" id="crosshair-dot-toggle"></div>
+                        <div class="control-row"><label>中心點大小</label><div class="slider-wrapper" style="width:50%"><input type="range" id="crosshair-dot-size" min="1" max="10" value="2"></div><span id="dot-size-value">2</span></div>
+                        <div class="control-row"><label>外框線</label><input type="checkbox" id="crosshair-outline-toggle" checked></div>
+                        <div class="control-row"><label>外框線顏色</label><input type="color" id="crosshair-outline-color" value="#000000"></div>
+                        <div class="control-row"><label>外框線寬度</label><div class="slider-wrapper" style="width:50%"><input type="range" id="crosshair-outline-thickness" min="0" max="5" value="1"></div><span id="outline-thickness-value">1</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="pause-screen" class="ui-overlay hidden">
+        <h1>遊戲暫停</h1>
+        <button id="resume-button" class="btn btn-highlight">繼續遊戲</button>
+        <button id="restart-button" class="btn btn-primary">重開一把</button>
+        <button id="menu-button" class="btn btn-primary">回到主選單</button>
+    </div>
+    
+    <div id="game-over-screen" class="ui-overlay hidden">
+        <div class="content-wrapper">
+            <div class="side-panel leaderboard">
+                <div class="leaderboard-header">
+                    <div class="leaderboard-title-container">
+                        <h2 id="leaderboard-title-gameover">最高分數</h2>
+                        <div class="tier-tooltip"></div>
+                     </div>
+                    <button class="clear-scores-btn">清除</button>
+                </div>
+                <ol id="highscore-list-gameover"></ol>
+            </div>
+            <div class="main-panel">
+                <h1 style="margin-bottom: 0;">訓練結束</h1>
+                
+                <div id="new-record-msg" class="new-record-alert hidden">新紀錄!</div>
+
+                <div class="final-score-wrapper">
+                    <div class="score-label-small">分數:</div>
+                    <div id="final-score">0</div>
+                </div>
+                
+                <div class="settings-container" style="background: rgba(255,255,255,0.03); padding: 1.5rem 2.5rem;">
+                    <div class="stat-row">
+                        <span class="stat-label" id="avg-score-label">平均得分</span>
+                        <span class="stat-value" id="avg-score-per-hit">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">平均擊殺時間</span>
+                        <span class="stat-value" id="avg-reaction-time">0 ms</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">準確率</span>
+                        <span class="stat-value" id="final-accuracy">0.00%</span>
+                    </div>
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: center; width: 100%; margin-top: 1rem;">
+                    <button id="play-again-button" class="btn btn-highlight">再來一把</button>
+                    <button id="back-to-menu-button" class="btn btn-primary" style="margin-top: 0.5rem;">回到主畫面</button>
+                </div>
+            </div>
+            
+            <div class="side-panel analysis-panel" id="analysis-panel">
+                <div id="analysis-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem; margin-bottom: 0.8rem;">
+                    <h2 style="margin: 0; border: none; padding: 0;">數據分析</h2>
+                    <div class="select-wrapper" style="width: auto; min-width: 90px; padding: 0;">
+                        <select id="history-scope-select" style="padding: 0.2rem 1.2rem 0.2rem 0.6rem; font-size: 0.8rem;">
+                            <option value="10" selected>近 10 場</option>
+                            <option value="20">近 20 場</option>
+                            <option value="30">近 30 場</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="analysis-section">
+                    <h3 id="trend-chart-title">近10場趨勢 (分數/命中率)</h3>
+                    <canvas id="trend-chart" width="340" height="140"></canvas>
+                </div>
+                
+                <div class="analysis-section" style="align-items: center;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 0.5rem;">
+                        <h3 style="margin: 0; width: auto;">方位盲區分析 (反應時間)</h3>
+                        <div class="segmented-control">
+                            <button id="scope-current" class="active">本次</button>
+                            <button id="scope-history">近10場</button>
+                        </div>
+                    </div>
+                    <canvas id="radar-chart" width="150" height="150"></canvas>
+                    <div id="blind-spot-text"></div>
+
+                    <h3 style="margin: 1rem 0 0.5rem 0; width: 100%; text-align: left;">方位盲區分析 (命中率)</h3>
+                    <canvas id="radar-chart-acc" width="150" height="150"></canvas>
+                    <div id="blind-spot-text-acc"></div>
+                </div>
+                
+                <div class="analysis-section" id="miss-stats-container" style="cursor: default; margin-bottom: 0;">
+                    <h3>失誤分析</h3>
+                    <div class="stat-row" id="row-overshoot" style="padding: 0.3rem 0;"><span class="stat-label" style="font-size: 0.9rem; transition: color 0.3s;">過度甩槍</span><span class="stat-value" id="stat-overshoot" style="font-size: 1rem; transition: color 0.3s;">0% (0)</span></div>
+                    <div class="stat-row" id="row-undershoot" style="padding: 0.3rem 0; border-bottom: none;"><span class="stat-label" style="font-size: 0.9rem; transition: color 0.3s;">甩不到</span><span class="stat-value" id="stat-undershoot" style="font-size: 1rem; transition: color 0.3s;">0% (0)</span></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="version-display" title="點擊查看版本資訊">v1.3.0</div>
+
+    <div id="version-modal" class="ui-overlay hidden">
+        <div class="modal-card" style="max-width: 480px; padding-bottom: 1.5rem;"> 
+            <h2 class="modal-title" style="margin-bottom: 0.5rem;">版本資訊</h2>
+            
+            <div style="display: flex; justify-content: center; margin-bottom: 0.5rem;">
+                <a href="https://nonescapes.com/Link" target="_blank" class="text-link-btn" style="font-size: 0.85rem;">聯繫作者</a>
+            </div>
+            
+            <pre id="version-content" class="version-text"></pre>
+            <div class="modal-btn-group" style="justify-content: center; margin-top: 1rem;"> 
+                <button id="close-version-btn" class="btn-modal btn-modal-secondary" style="flex: none; padding: 0.5rem 2rem; min-width: 120px; font-size: 0.9rem;">確定</button>
+            </div>
+        </div>
+    </div>
+<script type="module" src="game.js"></script>
+</body>
+</html>
