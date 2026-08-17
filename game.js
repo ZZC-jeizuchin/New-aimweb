@@ -1039,7 +1039,19 @@ const UI = {
             AimTelemetryManager.shots = [];
             AimTelemetryManager.generateReport(slicedData);
         }
-    }
+    },
+    // ---- 新增：開鏡視覺切換 ----
+    setADSVisual(active) {
+        const adsScope = document.getElementById('ads-scope');
+        const crosshair = document.getElementById('crosshair-in-game');
+        if (adsScope) {
+            if (active) adsScope.classList.remove('hidden');
+            else adsScope.classList.add('hidden');
+        }
+        if (crosshair) {
+            crosshair.style.display = active ? 'none' : '';
+        }
+    },
 };
 
 // --- 7. 設定管理 (靈敏度 & 準心 & 音效) ---
@@ -1416,8 +1428,13 @@ const Game = {
             posAnglesBag: [],
             lastTrackingTick: performance.now(),
             lastFrameTime: performance.now(),
-            elapsedMs: 0
+            elapsedMs: 0,
+            isADS: false            // 新增：確保開始時未開鏡
         });
+
+        // 新增：重置 ADS 視覺
+        UI.setADSVisual(false);
+        updateCameraFov();
 
         if (DOMElements.displays.accuracy) {
             DOMElements.displays.accuracy.textContent = `命中率: 0%`;
@@ -2154,27 +2171,21 @@ function setupEventListeners() {
     });
     DOMElements.displays.radarChartAcc.addEventListener('mouseleave', () => tooltip.style.opacity = 0);
 
-    // ----- 新增開鏡控制 -----
+    // ----- 修改開鏡控制 -----
     document.addEventListener('mousedown', (e) => {
-        if (e.button === 2) { // 右键
+        if (e.button === 2) {
             if (state.isPointerLocked && state.gameActive) {
                 state.isADS = true;
-                // 更新视野（在下一帧的 onWindowResize 会生效，但我们需要立即刷新）
-                onWindowResize();
-                // 显示镜框遮罩
-                const overlay = document.getElementById('ads-overlay');
-                if (overlay) overlay.style.display = 'block';
+                updateCameraFov();
+                UI.setADSVisual(true);
             }
         }
     });
     document.addEventListener('mouseup', (e) => {
-        if (e.button === 2) {
-            if (state.isADS) {
-                state.isADS = false;
-                onWindowResize();
-                const overlay = document.getElementById('ads-overlay');
-                if (overlay) overlay.style.display = 'none';
-            }
+        if (e.button === 2 && state.isADS) {
+            state.isADS = false;
+            updateCameraFov();
+            UI.setADSVisual(false);
         }
     });
     document.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -2240,6 +2251,13 @@ function handlePointerLockChange() {
         }
     } else {
         state.isPointerLocked = false;
+        // 强制关闭开镜状态，防止残留
+        if (state.isADS) {
+            state.isADS = false;
+            updateCameraFov();
+            UI.setADSVisual(false);
+        }
+
         if (state.countdownInterval) {
             clearInterval(state.countdownInterval);
             state.countdownInterval = null;
@@ -2265,14 +2283,19 @@ function handleMouseMove(event) {
     camera.quaternion.setFromEuler(euler);
 }
 
-function onWindowResize() {
+// 拆分 FOV 更新函数
+function updateCameraFov() {
     const aspect = window.innerWidth / window.innerHeight;
     let hfov = state.targetHfov;
     if (state.isADS) {
-        hfov *= state.adsFovMultiplier; // 视野缩小
+        hfov *= state.adsFovMultiplier;
     }
     camera.fov = hfovToVfov(hfov, aspect);
     camera.updateProjectionMatrix();
+}
+
+function onWindowResize() {
+    updateCameraFov();
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
